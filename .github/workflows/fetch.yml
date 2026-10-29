@@ -1,0 +1,37 @@
+name: fetch-manual
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download HEC-RAS Hydraulic Reference Manual
+        run: |
+          set -u
+          ok=""
+          for u in \
+            "https://www.hec.usace.army.mil/software/hec-ras/documentation/HEC-RAS%205.0%20Reference%20Manual.pdf" \
+            "https://uon.sdsu.edu/HEC-RAS_5.0_Reference_Manual.pdf" \
+            "https://webarchive.library.unt.edu/web/20161020213247/http://www.hec.usace.army.mil/software/hec-ras/documentation/HEC-RAS%205.0%20Reference%20Manual.pdf"; do
+            if curl -fL --retry 3 --max-time 600 -A "Mozilla/5.0" -o HEC-RAS_5.0_Reference_Manual.pdf "$u" \
+               && file HEC-RAS_5.0_Reference_Manual.pdf | grep -q PDF \
+               && [ "$(stat -c%s HEC-RAS_5.0_Reference_Manual.pdf)" -gt 1000000 ]; then ok="$u"; break; fi
+          done
+          if [ -z "$ok" ]; then
+            curl -fL --retry 3 --max-time 600 -A "Mozilla/5.0" -o HEC-RAS_4.1_Reference_Manual.pdf \
+              "https://webarchive.library.unt.edu/web/20130214140921/http://www.hec.usace.army.mil/software/hec-ras/documents/HEC-RAS_4.1_Reference_Manual.pdf"
+            file HEC-RAS_4.1_Reference_Manual.pdf | grep -q PDF
+            ok="unt-archive-4.1"
+          fi
+          rm -f HEC-RAS_*.pdf.tmp
+          echo "source: $ok" > SOURCE.txt
+          ls -la *.pdf; sha256sum *.pdf | tee -a SOURCE.txt
+      - name: Commit
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git add *.pdf SOURCE.txt
+          git commit -m "Add HEC-RAS Hydraulic Reference Manual"
+          git push
