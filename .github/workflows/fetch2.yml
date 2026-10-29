@@ -1,0 +1,28 @@
+name: fetch-fhwa
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download HEC-18 (5th ed) and NBI Coding Guide
+        run: |
+          sudo apt-get -qq install -y poppler-utils >/dev/null
+          get() { out="$1"; shift; for u in "$@"; do
+            if curl -fL --retry 3 --max-time 900 -A "Mozilla/5.0" -o "$out" "$u" && file "$out" | grep -q PDF; then echo "$out <- $u" >> SOURCE2.txt; return 0; fi; done; return 1; }
+          get HEC-18_5th_Edition_HIF-12-003.pdf \
+            "https://www.fhwa.dot.gov/engineering/hydraulics/pubs/hif12003.pdf" \
+            "https://rosap.ntl.bts.gov/view/dot/41204/dot_41204_DS1.pdf"
+          get NBI_Recording_and_Coding_Guide_1995.pdf \
+            "https://www.fhwa.dot.gov/bridge/mtguide.pdf"
+          for f in *.pdf; do echo "== $f"; pdfinfo "$f" | grep -E "Title|Pages"; pdftotext -l 3 "$f" - | head -25; done
+          sha256sum HEC-18_*.pdf NBI_*.pdf | tee -a SOURCE2.txt
+      - name: Commit
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git add HEC-18_*.pdf NBI_*.pdf SOURCE2.txt
+          git commit -m "Add HEC-18 5th edition and NBI Recording and Coding Guide"
+          git push
